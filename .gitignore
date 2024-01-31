@@ -7,4 +7,4 @@
 **/Chart.lock
 __pycache__/
 **/.DS_Store
-helm_deploy/hmpps-github-discovery/charts/*
+helm_deploy/*/charts/*
