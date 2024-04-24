@@ -6,5 +6,9 @@ generic-service:
     REFRESH_INTERVAL_HOURS: "6"
     LOG_LEVEL: debug
 
+  namespace_secrets:
+    hmpps-veracode-discovery:
+      SC_FILTER: "SC_FILTER"
+
 generic-prometheus-alerts:
   alertSeverity: hmpps-sre-alerts-dev
