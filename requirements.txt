@@ -1,2 +1,2 @@
-requests==2.31.0
+requests==2.32.0
 veracode-api-signing==22.3.0
