@@ -11,4 +11,4 @@ generic-service:
       SC_FILTER: "SC_FILTER"
 
 generic-prometheus-alerts:
-  alertSeverity: hmpps-sre-alerts-dev
+  alertSeverity: hmpps-sre-alerts-nonprod
