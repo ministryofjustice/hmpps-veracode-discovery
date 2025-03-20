@@ -10,6 +10,7 @@ discoveryCronJob:
       SERVICE_CATALOGUE_API_KEY: "SERVICE_CATALOGUE_API_KEY"
       VERACODE_API_KEY_ID: "VERACODE_API_KEY_ID"
       VERACODE_API_KEY_SECRET: "VERACODE_API_KEY_SECRET"
+      SLACK_BOT_TOKEN: "SLACK_BOT_TOKEN"
 
 generic-prometheus-alerts:
   targetApplication: hmpps-veracode-discovery

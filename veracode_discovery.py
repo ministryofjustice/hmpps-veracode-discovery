@@ -139,7 +139,7 @@ def main():
     'filter': os.getenv('SC_FILTER', ''),
   }
   slack_params = {
-    'token': os.getenv('SLACK_BOT_TOKEN'),
+    'token': os.getenv('SLACK_BOT_TOKEN', ''),
     'notify_channel': os.getenv('SLACK_NOTIFY_CHANNEL', ''),
     'alert_channel': os.getenv('SLACK_ALERT_CHANNEL', ''),
   }
