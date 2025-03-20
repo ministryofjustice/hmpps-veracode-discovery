@@ -36,3 +36,4 @@ spec:
                   type: RuntimeDefault
       {{- include "discoveryCronJob.envs" .Values | nindent 14 }}
           restartPolicy: Never
+{{- end }}
