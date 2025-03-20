@@ -1,14 +1,15 @@
 ---
 # Per environment values which override defaults in hmpps-veracode-discovery/values.yaml
 
-generic-service:
+discoveryCronJob:
+  enabled: true
+  veracode_scan_schedule: "25 3/6 * * *"
   env:
-    REFRESH_INTERVAL_HOURS: "6"
     LOG_LEVEL: debug
-
   namespace_secrets:
     hmpps-veracode-discovery:
       SC_FILTER: "SC_FILTER"
+
 
 generic-prometheus-alerts:
   alertSeverity: hmpps-sre-alerts-nonprod
