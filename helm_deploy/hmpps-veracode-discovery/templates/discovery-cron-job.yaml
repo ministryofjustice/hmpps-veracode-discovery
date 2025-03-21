@@ -22,7 +22,7 @@ spec:
           containers:
             - name: hmpps-veracode-discovery
               image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-              command: ["python", "-u", "/app/trivy_discovery.py", "-f"]
+              command: ["python", "-u", "/app/veracode_discovery.py"]
               env:
                 - name: PATH
                   value: "/home/appuser/.local:/usr/local/bin:$PATH"
