@@ -1,57 +1,54 @@
 #!/usr/bin/env python
-'''Github discovery - queries the github API for info about hmpps services and stores the results in the service catalogue'''
+"""Github discovery - queries the github API for info about hmpps services and stores the results in the service catalogue"""
+
 import os
-import http.server
-import socketserver
 import threading
 import logging
 from time import sleep
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 import requests
+from classes.service_catalogue import ServiceCatalogue
+from classes.slack import Slack
 
-SC_API_ENDPOINT = os.getenv("SERVICE_CATALOGUE_API_ENDPOINT")
-SC_API_TOKEN = os.getenv("SERVICE_CATALOGUE_API_KEY")
+SC_API_ENDPOINT = os.getenv('SERVICE_CATALOGUE_API_ENDPOINT')
+SC_API_TOKEN = os.getenv('SERVICE_CATALOGUE_API_KEY')
 
-REFRESH_INTERVAL_HOURS = int(os.getenv("REFRESH_INTERVAL_HOURS", "6"))
 # Set maximum number of concurrent threads to run, try to avoid secondary github api limits.
 MAX_THREADS = 5
 LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+  format='[%(asctime)s] %(levelname)s %(threadName)s %(message)s', level=LOG_LEVEL
+)
+log = logging.getLogger(__name__)
 
 # limit results for testing/dev
 # See strapi filter syntax https://docs.strapi.io/dev-docs/api/rest/filters-locale-publication
 # Example filter string = '&filters[name][$contains]=example'
-SC_FILTER = os.getenv("SC_FILTER", '')
-SC_PAGE_SIZE=10
-SC_PAGINATION_PAGE_SIZE=f"&pagination[pageSize]={SC_PAGE_SIZE}"
-# Example Sort filter
-#SC_SORT='&sort=updatedAt:asc'
-SC_SORT = ''
-SC_ENDPOINT = f"{SC_API_ENDPOINT}/v1/components?populate=environments{SC_FILTER}{SC_PAGINATION_PAGE_SIZE}{SC_SORT}"
+SC_FILTER = os.getenv('SC_FILTER', '')
 
-VERACODE_API_KEY_ID = os.getenv("VERACODE_API_KEY_ID")
-VERACODE_API_KEY_SECRET = os.getenv("VERACODE_API_KEY_SECRET")
-VERACODE_API_BASE = "https://api.veracode.com"
-VERACODE_HEADERS = {"User-Agent": "Python HMAC Example"}
+VERACODE_API_KEY_ID = os.getenv('VERACODE_API_KEY_ID')
+VERACODE_API_KEY_SECRET = os.getenv('VERACODE_API_KEY_SECRET')
+VERACODE_API_BASE = 'https://api.veracode.com'
+VERACODE_HEADERS = {'User-Agent': 'Python HMAC Example'}
 
-class HealthHttpRequestHandler(http.server.SimpleHTTPRequestHandler):
-  def do_GET(self):
-    self.send_response(200)
-    self.send_header("Content-type", "text/plain")
-    self.end_headers()
-    self.wfile.write(bytes("UP", "utf8"))
-    return
 
-def process_component(**component):
-  c_name = component["attributes"]["name"]
-  c_id = component["id"]
+def process_component(component, sc):
+  c_name = component['attributes']['name']
+  c_id = component['id']
+  log.info(f'Processing component: {c_name} ({c_id})')
   # Empty data dict gets populated along the way, and finally used in PUT request to service catalogue
   data = {}
   veracode_guid = None
 
   try:
-    response = requests.get(VERACODE_API_BASE + f"/appsec/v1/applications?name={c_name}", auth=RequestsAuthPluginVeracodeHMAC(), headers=VERACODE_HEADERS, timeout=30)
+    response = requests.get(
+      VERACODE_API_BASE + f'/appsec/v1/applications?name={c_name}',
+      auth=RequestsAuthPluginVeracodeHMAC(),
+      headers=VERACODE_HEADERS,
+      timeout=30,
+    )
   except requests.RequestException as e:
-    print(e)
+    log.error(f'error in response from veracode for {c_name}: (e)')
 
   if response.ok:
     try:
@@ -59,135 +56,131 @@ def process_component(**component):
       for app in veracode_r['_embedded']['applications']:
         if app['profile']['name'] == c_name:
           veracode_guid = app['guid']
-          veracode_results_url = "https://analysiscenter.veracode.com/auth/index.jsp#" + app['results_url']
-          data.update({"veracode_results_url": veracode_results_url})
+          veracode_results_url = (
+            'https://analysiscenter.veracode.com/auth/index.jsp#' + app['results_url']
+          )
+          data.update({'veracode_results_url': veracode_results_url})
           veracode_last_completed_scan_date = app['last_completed_scan_date']
-          data.update({"veracode_last_completed_scan_date": veracode_last_completed_scan_date})
-          log.debug(f"Found vericode app guid: {veracode_guid}")
+          data.update(
+            {'veracode_last_completed_scan_date': veracode_last_completed_scan_date}
+          )
+          log.debug(f'Found vericode app guid: {veracode_guid}')
           break
     except Exception as e:
       log.debug(e)
   else:
-    log.debug(f"API returned response: {response.status_code}")
+    log.warning(
+      f'Veracode API returned an unexpected response looking {c_name} GUID: {response.status_code}'
+    )
 
   if veracode_guid:
     try:
-      veracode_r = requests.get(VERACODE_API_BASE + f"/appsec/v2/applications/{veracode_guid}/summary_report", auth=RequestsAuthPluginVeracodeHMAC(), headers=VERACODE_HEADERS, timeout=30)
+      veracode_r = requests.get(
+        VERACODE_API_BASE + f'/appsec/v2/applications/{veracode_guid}/summary_report',
+        auth=RequestsAuthPluginVeracodeHMAC(),
+        headers=VERACODE_HEADERS,
+        timeout=30,
+      )
     except requests.RequestException as e:
-      log.debug(e)
+      log.warning(
+        f'Veracode API returned an unexpected response looking for a {c_name} (GUID {veracode_guid}) summary report: {response.status_code} ({e})'
+      )
 
     if veracode_r.ok:
       try:
         results_summary_data = veracode_r.json()
-        data.update({"veracode_results_summary": results_summary_data})
+        data.update({'veracode_results_summary': results_summary_data})
 
         veracode_policy_rules_status = results_summary_data['policy_rules_status']
-        data.update({"veracode_policy_rules_status": veracode_policy_rules_status})
+        data.update({'veracode_policy_rules_status': veracode_policy_rules_status})
 
         # If there is a report - assume the project shouldn't be exempt.
-        data.update({"veracode_exempt": False})
-        #print(json.dumps(results_summary_data, indent=2))
+        data.update({'veracode_exempt': False})
+        # log.debug(json.dumps(results_summary_data, indent=2))
       except Exception as e:
         log.debug(e)
     else:
-      print(response.status_code)
+      log.warning(
+        f'Failure response from veracode for {c_name} (guid: {veracode_guid}): {response.status_code}'
+      )
 
-    log.debug(data)
+    log.debug(f'Veracode data: {data}')
     # Update component with all results in data dict.
-    update_sc_component(c_id, data)
+    sc.update('components', c_id, data)
+  else:
+    log.info(f'No veracode scan found for {c_name}')
 
-def startHttpServer():
-  handler_object = HealthHttpRequestHandler
-  with socketserver.TCPServer(("", 8080), handler_object) as httpd:
-    httpd.serve_forever()
 
-def update_sc_component(c_id, data):
-  try:
-    log.debug(data)
-    x = requests.put(f"{SC_API_ENDPOINT}/v1/components/{c_id}", headers=sc_api_headers, json = {"data": data}, timeout=10)
-    if x.status_code == 200:
-      log.info(f"Successfully updated component id {c_id}: {x.status_code}")
-    else:
-      log.info(f"Received non-200 response from service catalogue for component id {c_id}: {x.status_code} {x.content}")
-  except Exception as e:
-    log.error(f"Error updating component in the SC: {e}")
-
-def process_components(data):
-  log.info(f"Processing batch of {len(data)} components...")
+def process_components(data, sc):
+  log.info(f'Processing batch of {len(data)} components...')
   for component in data:
-
-    t_repo = threading.Thread(target=process_component, kwargs=component, daemon=True)
+    component_name = component['attributes']['name']
+    t_repo = threading.Thread(
+      target=process_component, args=(component, sc), daemon=True
+    )
 
     # Apply limit on total active threads, avoid github secondary API rate limit
-    while threading.active_count() > (MAX_THREADS-1):
-      log.debug(f"Active Threads={threading.active_count()}, Max Threads={MAX_THREADS}")
+    while threading.active_count() > (MAX_THREADS - 1):
+      log.debug(f'Active Threads={threading.active_count()}, Max Threads={MAX_THREADS}')
       sleep(10)
 
     t_repo.start()
-    component_name = component["attributes"]["name"]
-    log.info(f"Started thread for {component_name}")
+    log.info(f'Started thread for {component_name}')
 
-if __name__ == '__main__':
-  logging.basicConfig(
-      format='[%(asctime)s] %(levelname)s %(threadName)s %(message)s', level=LOG_LEVEL)
-  log = logging.getLogger(__name__)
+  t_repo.join()
+  log.info(f'Finished all threads for batch of {len(data)} components.')
 
-  sc_api_headers = {"Authorization": f"Bearer {SC_API_TOKEN}", "Content-Type":"application/json","Accept": "application/json"}
 
-  # Test connection to Service Catalogue
-  try:
-    r = requests.head(f"{SC_API_ENDPOINT}/_health", headers=sc_api_headers, timeout=10)
-    log.info(f"Successfully connected to the Service Catalogue. {r.status_code}")
-  except Exception as e:
-    log.critical("Unable to connect to the Service Catalogue.")
-    raise SystemExit(e) from e
+def main():
+  # service catalogue parameters
+  sc_params = {
+    'url': os.getenv('SERVICE_CATALOGUE_API_ENDPOINT'),
+    'key': os.getenv('SERVICE_CATALOGUE_API_KEY'),
+    'filter': os.getenv('SC_FILTER', ''),
+  }
+  slack_params = {
+    'token': os.getenv('SLACK_BOT_TOKEN', ''),
+    'notify_channel': os.getenv('SLACK_NOTIFY_CHANNEL', ''),
+    'alert_channel': os.getenv('SLACK_ALERT_CHANNEL', ''),
+  }
+  sc = ServiceCatalogue(sc_params, log)
+  slack = Slack(slack_params, log)
+
+  if not sc.connection_ok:
+    log.error('Service Catalogue connection not OK, exiting.')
+    slack.alert('hmpps-veracode-discovery failed: unable to reach Service Catalogue')
+    raise SystemExit
 
   # Test connection to veracode
   if not VERACODE_API_KEY_ID:
-    raise SystemExit("VERACODE_API_KEY_ID env var not set")
+    slack.alert('VERACODE_API_KEY_ID environment variable not set')
+    raise SystemExit(
+      'hmpps-veracode-discovery failed: VERACODE_API_KEY_ID environment variable not set'
+    )
 
   if not VERACODE_API_KEY_SECRET:
-    raise SystemExit("VERACODE_API_KEY_SECRET env var not set")
+    slack.alert('VERACODE_API_KEY_SECRET environment variable not set')
+    raise SystemExit(
+      'hmpps-veracode-discovery failed: VERACODE_API_KEY_SECRET environment variable not set'
+    )
 
   try:
-    response = requests.get(VERACODE_API_BASE + "/healthcheck/status", auth=RequestsAuthPluginVeracodeHMAC(), headers=VERACODE_HEADERS, timeout=30)
+    response = requests.get(
+      VERACODE_API_BASE + '/healthcheck/status',
+      auth=RequestsAuthPluginVeracodeHMAC(),
+      headers=VERACODE_HEADERS,
+      timeout=30,
+    )
     if response.status_code == 200:
-      log.debug("Successfully connected to veracode API.")
+      log.debug('Successfully connected to veracode API.')
   except Exception as e:
-    log.critical("Unable to connect to the veracode API.")
+    log.critical('Unable to connect to the veracode API.')
+    slack.alert('Unable to connect to the veracode API.')
     raise SystemExit(e) from e
 
-  while True:
-    # Start health endpoint.
-    httpHealth = threading.Thread(target=startHttpServer, daemon=True)
-    httpHealth.start()
+  components = sc.get_all_records(sc.components_get)
+  process_components(components, sc)
 
-    log.info(SC_ENDPOINT)
-    try:
-      r = requests.get(SC_ENDPOINT, headers=sc_api_headers, timeout=10)
-      log.debug(r)
-      if r.status_code == 200:
-        j_meta = r.json()["meta"]["pagination"]
-        log.debug(f"Got result page: {j_meta['page']} from SC")
-        j_data = r.json()["data"]
-        process_components(j_data)
-      else:
-        raise Exception(f"Received non-200 response from Service Catalogue: {r.status_code}")
 
-      # Loop over the remaining pages and return one at a time
-      num_pages = j_meta['pageCount']
-      for p in range(2, num_pages+1):
-        page=f"&pagination[page]={p}"
-        r = requests.get(f"{SC_ENDPOINT}{page}", headers=sc_api_headers, timeout=10)
-        if r.status_code == 200:
-          j_meta = r.json()["meta"]["pagination"]
-          log.debug(f"Got result page: {j_meta['page']} from SC")
-          j_data = r.json()["data"]
-          process_components(j_data)
-        else:
-          raise Exception(f"Received non-200 response from Service Catalogue: {r.status_code}")
-
-    except Exception as e:
-      log.error(f"Problem with Service Catalogue API. {e}")
-
-    sleep((REFRESH_INTERVAL_HOURS * 60 * 60))
+if __name__ == '__main__':
+  main()
