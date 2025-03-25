@@ -1,8 +1,5 @@
 ---
 # Per environment values which override defaults in hmpps-veracode-discovery/values.yaml
----
-# Per environment values which override defaults in hmpps-veracode-discovery/values.yaml
-
 discoveryCronJob:
   enabled: true
   veracode_scan_schedule: "25 */6 * * *"
