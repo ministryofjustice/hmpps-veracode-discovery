@@ -21,7 +21,7 @@ spec:
         spec:
           containers:
             - name: hmpps-veracode-discovery
-              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              image: "{{ .Values.image.repository }}:{{ .Values.version }}"
               command: ["python", "-u", "/app/veracode_discovery.py"]
               env:
                 - name: PATH
