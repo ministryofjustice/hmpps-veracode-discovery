@@ -9,6 +9,8 @@ from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 import requests
 from classes.service_catalogue import ServiceCatalogue
 from classes.slack import Slack
+import utils.update_sc_scheduled_jobs as update_sc_scheduled_job
+import globals
 
 SC_API_ENDPOINT = os.getenv('SERVICE_CATALOGUE_API_ENDPOINT')
 SC_API_TOKEN = os.getenv('SERVICE_CATALOGUE_API_KEY')
@@ -31,8 +33,13 @@ VERACODE_API_KEY_SECRET = os.getenv('VERACODE_API_KEY_SECRET')
 VERACODE_API_BASE = 'https://api.veracode.com'
 VERACODE_HEADERS = {'User-Agent': 'Python HMAC Example'}
 
+class Services:
+  def __init__(self, sc_params, slack_params, log):
+    self.slack = Slack(slack_params, log)
+    self.sc = ServiceCatalogue(sc_params, log)
+    self.log = log
 
-def process_component(component, sc):
+def process_component(component):
   c_name = component['attributes']['name']
   c_id = component['id']
   log.info(f'Processing component: {c_name} ({c_id})')
@@ -49,6 +56,7 @@ def process_component(component, sc):
     )
   except requests.RequestException as e:
     log.error(f'error in response from veracode for {c_name}: (e)')
+    globals.error_messages.append(f'error in response from veracode for {c_name}: (e)')
 
   if response.ok:
     try:
@@ -106,17 +114,17 @@ def process_component(component, sc):
 
     log.debug(f'Veracode data: {data}')
     # Update component with all results in data dict.
-    sc.update('components', c_id, data)
+    globals.services.sc.update('components', c_id, data)
   else:
     log.info(f'No veracode scan found for {c_name}')
 
 
-def process_components(data, sc):
+def process_components(data):
   log.info(f'Processing batch of {len(data)} components...')
   for component in data:
     component_name = component['attributes']['name']
     t_repo = threading.Thread(
-      target=process_component, args=(component, sc), daemon=True
+      target=process_component, args=(component,), daemon=True
     )
 
     # Apply limit on total active threads, avoid github secondary API rate limit
@@ -132,6 +140,7 @@ def process_components(data, sc):
 
 
 def main():
+  
   # service catalogue parameters
   sc_params = {
     'url': os.getenv('SERVICE_CATALOGUE_API_ENDPOINT'),
@@ -143,26 +152,27 @@ def main():
     'notify_channel': os.getenv('SLACK_NOTIFY_CHANNEL', ''),
     'alert_channel': os.getenv('SLACK_ALERT_CHANNEL', ''),
   }
-  sc = ServiceCatalogue(sc_params, log)
-  slack = Slack(slack_params, log)
+  # sc = ServiceCatalogue(sc_params, log)
+  # slack = Slack(slack_params, log)
 
-  if not sc.connection_ok:
+  globals.services = Services(sc_params, slack_params, log)
+  if not globals.services.sc.connection_ok:
     log.error('Service Catalogue connection not OK, exiting.')
-    slack.alert('hmpps-veracode-discovery failed: unable to reach Service Catalogue')
+    globals.services.slack.alert('hmpps-veracode-discovery failed: unable to reach Service Catalogue')
     raise SystemExit
 
   # Test connection to veracode
   if not VERACODE_API_KEY_ID:
-    slack.alert('VERACODE_API_KEY_ID environment variable not set')
-    raise SystemExit(
-      'hmpps-veracode-discovery failed: VERACODE_API_KEY_ID environment variable not set'
-    )
+    globals.services.slack.alert('VERACODE_API_KEY_ID environment variable not set')
+    globals.error_messages.append("VERACODE_API_KEY_ID environment variable not set")
+    update_sc_scheduled_job.process_sc_scheduled_jobs('Failed')
+    raise SystemExit('hmpps-veracode-discovery failed: VERACODE_API_KEY_ID environment variable not set')
 
   if not VERACODE_API_KEY_SECRET:
-    slack.alert('VERACODE_API_KEY_SECRET environment variable not set')
-    raise SystemExit(
-      'hmpps-veracode-discovery failed: VERACODE_API_KEY_SECRET environment variable not set'
-    )
+    globals.services.slack.alert('VERACODE_API_KEY_SECRET environment variable not set')
+    globals.error_messages.append("VERACODE_API_KEY_SECRET environment variable not set")
+    update_sc_scheduled_job.process_sc_scheduled_jobs('Failed')
+    raise SystemExit('hmpps-veracode-discovery failed: VERACODE_API_KEY_SECRET environment variable not set')
 
   try:
     response = requests.get(
@@ -175,12 +185,20 @@ def main():
       log.debug('Successfully connected to veracode API.')
   except Exception as e:
     log.critical('Unable to connect to the veracode API.')
-    slack.alert('Unable to connect to the veracode API.')
+    globals.services.slack.alert('Unable to connect to the veracode API.')
+    globals.error_messages.append(f"Unable to connect to the veracode API")
+    update_sc_scheduled_job.process_sc_scheduled_jobs('Failed')
     raise SystemExit(e) from e
 
-  components = sc.get_all_records(sc.components_get)
-  process_components(components, sc)
+  components = globals.services.sc.get_all_records(globals.services.sc.components_get)
+  process_components(components)
 
+  if globals.error_messages:
+    update_sc_scheduled_job.process_sc_scheduled_jobs('Errors')
+    log.info("Veracode discovery job completed  with errors.")
+  else:
+    update_sc_scheduled_job.process_sc_scheduled_jobs('Succeeded')
+    log.info("Veracode discovery job completed successfully.")
 
 if __name__ == '__main__':
   main()
