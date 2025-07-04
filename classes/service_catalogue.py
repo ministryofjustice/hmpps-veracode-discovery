@@ -32,7 +32,7 @@ class ServiceCatalogue:
       'Accept': 'application/json',
     }
     self.components = 'components'
-    self.components_get = f'{self.components}?populate[0]=latest_commit&populate[1]=environments&populate[2]=product&populate[3]=envs{self.filter}{pagination_page_size}{sort_filter}'
+    self.components_get = f'{self.components}?populate[0]=latest_commit&populate[1]=product&populate[2]=envs{self.filter}{pagination_page_size}{sort_filter}'
 
     self.products = 'products'
     self.products_get = f'{self.products}?populate[0]=parent&populate[1]=children&populate[2]=product_set&populate[3]=service_area&populate[4]=team{self.product_filter}{pagination_page_size}{sort_filter}'
@@ -214,9 +214,10 @@ class ServiceCatalogue:
 
   def get_component_env_id(self, component, env):
     env_id = None
-    for env_data in component['attributes'].get('environments'):
+    for env in component['attributes'].get('envs', {}).get('data', []):
+      env_data = env['attributes']
       if env_data['name'] == env:
-        env_id = env_data['id']
+        env_id = env['id']
         self.log.debug(
           f'Found existing environment ID for {env} in component {component["attributes"]["name"]}: {env_id}'
         )
