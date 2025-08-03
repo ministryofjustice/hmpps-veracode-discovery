@@ -32,15 +32,15 @@ class ServiceCatalogue:
       'Accept': 'application/json',
     }
     self.components = 'components'
-    self.components_get = f'{self.components}?populate[0]=latest_commit&populate[1]=product&populate[2]=envs{self.filter}{pagination_page_size}{sort_filter}'
+    self.components_get = f'{self.components}?populate[product]=true&populate[latest_commit]=true&populate[envs]=true{self.filter}{pagination_page_size}{sort_filter}'
 
     self.products = 'products'
-    self.products_get = f'{self.products}?populate[0]=parent&populate[1]=children&populate[2]=product_set&populate[3]=service_area&populate[4]=team{self.product_filter}{pagination_page_size}{sort_filter}'
+    self.products_get = f'{self.products}?populate[parent]=true&populate[children]=true&populate[product_set]=true&populate[service_area]=true&populate[team]=true{self.product_filter}{pagination_page_size}{sort_filter}'
 
     self.github_teams = 'github-teams'
     self.environments = 'environments'
     self.environments_get = (
-      f'{self.environments}?populate[0]=component{pagination_page_size}{sort_filter}'
+      f'{self.environments}?populate[component]=true{pagination_page_size}{sort_filter}'
     )
     self.scheduled_jobs_get = f'scheduled-jobs?filters[name][$eq]={job.name}'
     self.connection_ok = self.test_connection()
@@ -130,7 +130,7 @@ class ServiceCatalogue:
 
     except Exception as e:
       self.log.error(
-        f'Problem with Service Catalogue API while reading all records from {table}. {e}'
+        f'Parameter {parameter} does not exist in {table}. {e}'
       )
     return json_data
 
@@ -173,7 +173,7 @@ class ServiceCatalogue:
         json={'data': data},
         timeout=10,
       )
-      if x.status_code == 200:
+      if x.status_code == 201:
         self.log.info(
           f'Successfully added {(data["team_name"] if "team_name" in data else data["name"])} to {table.split("/")[-1]}: {x.status_code}'
         )
@@ -188,8 +188,8 @@ class ServiceCatalogue:
       )
     return success
 
-  # eg get_id('github-teams', 'team_name', 'example')
-  def get_id(self, match_table, match_field, match_string):
+  # eg get_documentId('github-teams', 'team_name', 'example')
+  def get_documentId(self, match_table, match_field, match_string):
     try:
       r = requests.get(
         f'{self.url}/v1/{match_table}?filters[{match_field}][$eq]={match_string.replace("&", "&amp;")}',
@@ -197,7 +197,7 @@ class ServiceCatalogue:
         timeout=10,
       )
       if r.status_code == 200 and r.json()['data']:
-        sc_id = r.json()['data'][0]['id']
+        sc_id = r.json()['data'][0]['documentId']
         self.log.debug(
           f'Successfully found Service Catalogue ID for {match_field}={match_string} in {match_table}: {sc_id}'
         )
@@ -214,16 +214,14 @@ class ServiceCatalogue:
 
   def get_component_env_id(self, component, env):
     env_id = None
-    for env in component['attributes'].get('envs', {}).get('data', []):
-      env_data = env['attributes']
-      if env_data['name'] == env:
-        env_id = env['id']
-        self.log.debug(
-          f'Found existing environment ID for {env} in component {component["attributes"]["name"]}: {env_id}'
-        )
+    for env in component.get('envs', {}):
+      env_id = env.get('documentId')
+      self.log.debug(
+        f'Found existing environment ID for {env} in component {component.get("name")}: {env_id}'
+      )
     if not env_id:
       self.log.debug(
-        f'No existing environment ID found for {env} in component {component["attributes"]["name"]}'
+        f'No existing environment ID found for {env} in component {component.get("name")}'
       )
     return env_id
 
@@ -231,8 +229,7 @@ class ServiceCatalogue:
     components = self.get_all_records(self.components_get)
     combined_teams = set()
     for component in components:
-      attributes = component.get('attributes', {})
-      combined_teams.update(attributes.get('github_project_teams_write', []) or [])
-      combined_teams.update(attributes.get('github_project_teams_admin', []) or [])
-      combined_teams.update(attributes.get('github_project_teams_maintain', []) or [])
+      combined_teams.update(component.get('github_project_teams_write', []) or [])
+      combined_teams.update(component.get('github_project_teams_admin', []) or [])
+      combined_teams.update(component.get('github_project_teams_maintain', []) or [])
     return combined_teams
