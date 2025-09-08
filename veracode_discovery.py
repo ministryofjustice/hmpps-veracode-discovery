@@ -42,8 +42,8 @@ class Services:
 def process_component(component, services):
   sc = services.sc
   log = services.log
-  c_name = component['attributes']['name']
-  c_id = component['id']
+  c_name = component.get('name')
+  c_id = component.get('documentId')
   log.info(f'Processing component: {c_name} ({c_id})')
   # Empty data dict gets populated along the way, and finally used in PUT request to service catalogue
   data = {}
@@ -124,7 +124,7 @@ def process_component(component, services):
 def process_components(data, services):
   log.info(f'Processing batch of {len(data)} components...')
   for component in data:
-    component_name = component['attributes']['name']
+    component_name = component.get('name')
     t_repo = threading.Thread(
       target=process_component, args=(component,services), daemon=True
     )
