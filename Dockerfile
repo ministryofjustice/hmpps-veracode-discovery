@@ -4,12 +4,11 @@ WORKDIR /app
 RUN addgroup -g 2000 appgroup && \
     adduser -u 2000 -G appgroup -h /home/appuser -D appuser
 
-# copy the dependencies from builder stage
-COPY --chown=appuser:appgroup --from=builder /home/appuser/.local /home/appuser/.local
-COPY ./veracode_discovery.py .
+# initialise uv
+COPY pyproject.toml .
+RUN uv sync
 
-# update PATH environment variable
-ENV PATH=/home/appuser/.local:$PATH
+COPY ./veracode_discovery.py .
 
 USER 2000
 
