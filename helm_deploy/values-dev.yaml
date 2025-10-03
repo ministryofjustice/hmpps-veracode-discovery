@@ -3,7 +3,7 @@
 
 discoveryCronJob:
   enabled: true
-  veracode_scan_schedule: "25 3/6 * * *"
+  veracode_scan_schedule: "25 3,9,15,21 * * *"
   env:
     LOG_LEVEL: debug
   
