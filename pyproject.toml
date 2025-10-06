@@ -1,0 +1,13 @@
+[project]
+name = "hmpps-veracode-discovery"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "hmpps-python-lib",
+    "veracode-api-signing==22.3.0",
+]
+
+[tool.uv.sources]
+hmpps-python-lib = { url = "https://github.com/ministryofjustice/hmpps-python-lib/releases/download/v0.1.2/hmpps_python_lib-0.1.2-py3-none-any.whl" }

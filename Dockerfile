@@ -1,30 +1,15 @@
-FROM python:3.13-slim AS builder
-COPY requirements.txt .
-
-RUN addgroup --gid 2000 --system appgroup && \
-    adduser --uid 2000 --system appuser --gid 2000 --home /home/appuser
-
-USER 2000
-
-# install dependencies to the local user directory
-RUN pip install --user -r requirements.txt
-
-FROM python:3.13-slim
+FROM ghcr.io/astral-sh/uv:python3.13-alpine
 WORKDIR /app
 
-RUN addgroup --gid 2000 --system appgroup && \
-    adduser --uid 2000 --system appuser --gid 2000 --home /home/appuser
+RUN addgroup -g 2000 appgroup && \
+    adduser -u 2000 -G appgroup -h /home/appuser -D appuser
 
-# copy the dependencies from builder stage
-COPY --chown=appuser:appgroup --from=builder /home/appuser/.local /home/appuser/.local
+# initialise uv
+COPY pyproject.toml .
+RUN uv sync
+
 COPY ./veracode_discovery.py .
-COPY ./classes ./classes
-COPY ./processes ./processes
-COPY ./utilities ./utilities
-
-# update PATH environment variable
-ENV PATH=/home/appuser/.local:$PATH
 
 USER 2000
 
-CMD [ "python", "-u", "veracode_discovery.py" ]
+CMD [ "uv", "run", "python", "-u", "veracode_discovery.py" ]
