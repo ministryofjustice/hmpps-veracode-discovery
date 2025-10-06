@@ -22,7 +22,7 @@ spec:
           containers:
             - name: hmpps-veracode-discovery
               image: "{{ .Values.image.repository }}:{{ .Values.version }}"
-              command: ["python", "-u", "/app/veracode_discovery.py"]
+              command: ["uv", "run", python", "-u", "/app/veracode_discovery.py"]
               env:
                 - name: PATH
                   value: "/home/appuser/.local:/usr/local/bin:$PATH"
