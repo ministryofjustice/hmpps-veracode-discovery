@@ -24,7 +24,7 @@ SC_FILTER = os.getenv('SC_FILTER', '')
 VERACODE_API_KEY_ID = os.getenv('VERACODE_API_KEY_ID')
 VERACODE_API_KEY_SECRET = os.getenv('VERACODE_API_KEY_SECRET')
 VERACODE_API_BASE = 'https://api.veracode.com'
-VERACODE_HEADERS = {'User-Agent': 'Python HMAC Example'}
+VERACODE_HEADERS = {'User-Agent': 'Python HMAC script'}
 
 class Services:
   def __init__(self, sc_params, slack_params):
@@ -55,21 +55,27 @@ def process_component(component, services):
   if response.ok:
     try:
       veracode_r = response.json()
-      for app in veracode_r['_embedded']['applications']:
-        if app['profile']['name'] == c_name:
-          veracode_guid = app['guid']
-          veracode_results_url = (
-            'https://analysiscenter.veracode.com/auth/index.jsp#' + app['results_url']
-          )
-          data.update({'veracode_results_url': veracode_results_url})
-          veracode_last_completed_scan_date = app['last_completed_scan_date']
-          data.update(
-            {'veracode_last_completed_scan_date': veracode_last_completed_scan_date}
-          )
-          log_debug(f'Found vericode app guid: {veracode_guid}')
-          break
+      # Valid data is within the _embedded dictionary
+      if app_list := veracode_r.get('_embedded'):
+        for app in app_list.get('applications'):
+          if app['profile']['name'] == c_name:
+            veracode_guid = app['guid']
+            veracode_results_url = (
+              'https://analysiscenter.veracode.com/auth/index.jsp#' + app['results_url']
+            )
+            data.update({'veracode_results_url': veracode_results_url})
+            veracode_last_completed_scan_date = app['last_completed_scan_date']
+            data.update(
+              {'veracode_last_completed_scan_date': veracode_last_completed_scan_date}
+            )
+            log_debug(f'Found vericode app guid: {veracode_guid}')
+            break
+      else:
+        log_info(f'No veracode data for {c_name} - skipping.')
+        return None
+
     except Exception as e:
-      log_info(f'Failed to extract veracode data: {e}')
+        log_info(f'Failed to extract veracode data: {e}')
   else:
     log_warning(
       f'Veracode API returned an unexpected response looking for {c_name} GUID: {response.status_code}'
