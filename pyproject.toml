@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "hmpps-python-lib",
-    "veracode-api-signing==22.3.0",
+    "veracode-api-signing==25.8.0",
 ]
 
 [tool.uv.sources]
