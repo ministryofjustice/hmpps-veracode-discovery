@@ -1,23 +1,32 @@
 #!/usr/bin/env python
-"""Github discovery - queries the github API for info about hmpps services and stores the results in the service catalogue"""
+"""Github discovery - queries the github API for info about hmpps services and 
+stores the results in the service catalogue"""
 
 import os
 import threading
-import logging
 from time import sleep
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 import requests
 from hmpps import ServiceCatalogue, Slack
-from hmpps.services.job_log_handling import log_critical, log_error, log_warning, log_info, log_debug, job
+from hmpps.services.job_log_handling import (
+  log_debug,
+  log_error,
+  log_info,
+  log_warning,
+  log_critical,
+  job,
+)
 
 SC_API_ENDPOINT = os.getenv('SERVICE_CATALOGUE_API_ENDPOINT')
 SC_API_TOKEN = os.getenv('SERVICE_CATALOGUE_API_KEY')
 
-# Set maximum number of concurrent threads to run, try to avoid secondary github api limits.
+# Set maximum number of concurrent threads to run, try to avoid secondary 
+# github api limits.
 MAX_THREADS = 5
 
 # limit results for testing/dev
-# See strapi filter syntax https://docs.strapi.io/dev-docs/api/rest/filters-locale-publication
+# See strapi filter syntax 
+# https://docs.strapi.io/dev-docs/api/rest/filters-locale-publication
 # Example filter string = '&filters[name][$contains]=example'
 SC_FILTER = os.getenv('SC_FILTER', '')
 
@@ -36,7 +45,8 @@ def process_component(component, services):
   c_name = component.get('name')
   c_id = component.get('documentId')
   log_info(f'Processing component: {c_name} ({c_id})')
-  # Empty data dict gets populated along the way, and finally used in PUT request to service catalogue
+  # Empty data dict gets populated along the way, and 
+  # finally used in PUT request to service catalogue
   data = {}
   veracode_guid = None
 
@@ -78,7 +88,8 @@ def process_component(component, services):
         log_info(f'Failed to extract veracode data: {e}')
   else:
     log_warning(
-      f'Veracode API returned an unexpected response looking for {c_name} GUID: {response.status_code}'
+      f'Veracode API returned an unexpected response looking for {c_name} GUID: '
+      f'{response.status_code}'
     )
 
   if veracode_guid:
@@ -91,7 +102,8 @@ def process_component(component, services):
       )
     except requests.RequestException as e:
       log_warning(
-        f'Veracode API returned an unexpected response looking for a {c_name} (GUID {veracode_guid}) summary report: {response.status_code} ({e})'
+        f'Veracode API returned an unexpected response looking for a {c_name} '
+        f'(GUID {veracode_guid}) summary report: {response.status_code} ({e})'
       )
       return None
 
@@ -110,7 +122,8 @@ def process_component(component, services):
         log_debug(f'Unable to extract summary data from veracode: {e}')
     else:
       log_warning(
-        f'Failure response from veracode for {c_name} (guid: {veracode_guid}): {response.status_code}'
+        f'Failure response from veracode for {c_name} (guid: {veracode_guid}): '
+        f'{response.status_code}'
       )
 
     log_debug(f'Veracode data: {data}')
@@ -169,13 +182,19 @@ def main():
     slack.alert('VERACODE_API_KEY_ID environment variable not set')
     job.error_messages.append("VERACODE_API_KEY_ID environment variable not set")
     sc.update_scheduled_job('Failed')
-    raise SystemExit('hmpps-veracode-discovery failed: VERACODE_API_KEY_ID environment variable not set')
+    raise SystemExit(
+      'hmpps-veracode-discovery failed: '
+      'VERACODE_API_KEY_ID environment variable not set'
+    )
 
   if not VERACODE_API_KEY_SECRET:
     slack.alert('VERACODE_API_KEY_SECRET environment variable not set')
     job.error_messages.append("VERACODE_API_KEY_SECRET environment variable not set")
     sc.update_scheduled_job('Failed')
-    raise SystemExit('hmpps-veracode-discovery failed: VERACODE_API_KEY_SECRET environment variable not set')
+    raise SystemExit(
+      'hmpps-veracode-discovery failed: '
+      'VERACODE_API_KEY_SECRET environment variable not set'
+    )
 
   try:
     response = requests.get(
@@ -189,7 +208,7 @@ def main():
   except Exception as e:
     log_critical('Unable to connect to the veracode API.')
     slack.alert('Unable to connect to the veracode API.')
-    job.error_messages.append(f"Unable to connect to the veracode API")
+    job.error_messages.append("Unable to connect to the veracode API")
     sc.update_scheduled_job('Failed')
     raise SystemExit(e) from e
 
