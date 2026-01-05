@@ -40,19 +40,85 @@ class Services:
     self.slack = Slack(slack_params)
     self.sc = ServiceCatalogue(sc_params)
 
+def run_veracode_connection(VERACODE_API_KEY_ID, VERACODE_API_KEY_SECRET, services):
+  slack = services.slack
+  sc = services.sc
+  # Test connection to veracode
+  if not VERACODE_API_KEY_ID:
+    slack.alert('VERACODE_API_KEY_ID environment variable not set')
+    job.error_messages.append("VERACODE_API_KEY_ID environment variable not set")
+    sc.update_scheduled_job('Failed')
+    raise SystemExit(
+      'hmpps-veracode-discovery failed: '
+      'VERACODE_API_KEY_ID environment variable not set'
+    )
+
+  if not VERACODE_API_KEY_SECRET:
+    slack.alert('VERACODE_API_KEY_SECRET environment variable not set')
+    job.error_messages.append("VERACODE_API_KEY_SECRET environment variable not set")
+    sc.update_scheduled_job('Failed')
+    raise SystemExit(
+      'hmpps-veracode-discovery failed: '
+      'VERACODE_API_KEY_SECRET environment variable not set'
+    )
+  try:
+    response = requests.get(
+      VERACODE_API_BASE + '/healthcheck/status',
+      auth=RequestsAuthPluginVeracodeHMAC(),
+      headers=VERACODE_HEADERS,
+      timeout=30,
+    )
+    if response.status_code == 200:
+      log_debug('Veracode connection test successful.')
+      return response
+  except Exception as e:
+    log_critical('Unable to connect to the veracode API.')
+    slack.alert('Unable to connect to the veracode API.')
+    job.error_messages.append('Unable to connect to the veracode API')
+    sc.update_scheduled_job('Failed')
+    raise SystemExit(e) from e
+  
 def process_component(component, services):
   sc = services.sc
   c_name = component.get('name')
   c_id = component.get('documentId')
   log_info(f'Processing component: {c_name} ({c_id})')
-  # Empty data dict gets populated along the way, and 
-  # finally used in PUT request to service catalogue
-  data = {}
-  veracode_guid = None
 
+  # Fetch Veracode data
+  try:
+    response = fetch_veracode_data(c_name)
+  except Exception as e:
+    log_error(f'Error fetching Veracode data for {c_name}: {e}')
+    job.error_messages.append(f'Error fetching Veracode data for {c_name}: {e}')
+    return None
+
+  # Parse the response
+  try:
+    data, veracode_guid = parse_veracode_response(response, c_name)
+    if not data:
+      log_info(f'No Veracode data for {c_name} - skipping.')
+      return None
+  except Exception as e:
+    log_error(f'Failed to parse Veracode data for {c_name}: {e}')
+    return None
+  log_debug(f'Veracode data for {c_name}: {data}')
+
+  # Fetch Veracode summary report
+  if veracode_guid:
+    data = get_veracode_summary_report(veracode_guid, c_name, data)
+    if not data:
+      log_info(f'No Veracode summary report for {c_name} - skipping.')
+      return None
+    log_debug(f'Veracode summary report data for {c_name}: {data}')
+
+  # Update component in Service Catalogue
+  sc.update('components', c_id, data)
+
+def fetch_veracode_data(c_name):
+  url = f"{VERACODE_API_BASE}/appsec/v1/applications?name={c_name}"
   try:
     response = requests.get(
-      VERACODE_API_BASE + f'/appsec/v1/applications?name={c_name}',
+      url,
       auth=RequestsAuthPluginVeracodeHMAC(),
       headers=VERACODE_HEADERS,
       timeout=30,
@@ -62,76 +128,68 @@ def process_component(component, services):
     job.error_messages.append(f'error in response from veracode for {c_name}: (e)')
     return None
   
-  if response.ok:
-    try:
-      veracode_r = response.json()
-      # Valid data is within the _embedded dictionary
-      if app_list := veracode_r.get('_embedded'):
-        for app in app_list.get('applications'):
-          if app['profile']['name'] == c_name:
-            veracode_guid = app['guid']
-            veracode_results_url = (
-              'https://analysiscenter.veracode.com/auth/index.jsp#' + app['results_url']
-            )
-            data.update({'veracode_results_url': veracode_results_url})
-            veracode_last_completed_scan_date = app['last_completed_scan_date']
-            data.update(
-              {'veracode_last_completed_scan_date': veracode_last_completed_scan_date}
-            )
-            log_debug(f'Found vericode app guid: {veracode_guid}')
-            break
-      else:
-        log_info(f'No veracode data for {c_name} - skipping.')
-        return None
-
-    except Exception as e:
-        log_info(f'Failed to extract veracode data: {e}')
-  else:
+  if not response.ok:
     log_warning(
       f'Veracode API returned an unexpected response looking for {c_name} GUID: '
       f'{response.status_code}'
     )
+    return None
+  else:
+    log_debug(f'Veracode API response for {c_name} received successfully.')
+    return response
 
-  if veracode_guid:
-    try:
-      veracode_r = requests.get(
-        VERACODE_API_BASE + f'/appsec/v2/applications/{veracode_guid}/summary_report',
-        auth=RequestsAuthPluginVeracodeHMAC(),
-        headers=VERACODE_HEADERS,
-        timeout=30,
-      )
-    except requests.RequestException as e:
-      log_warning(
-        f'Veracode API returned an unexpected response looking for a {c_name} '
-        f'(GUID {veracode_guid}) summary report: {response.status_code} ({e})'
-      )
-      return None
 
-    if veracode_r.ok:
+def parse_veracode_response(response, c_name):
+  data = {}
+  veracode_guid = None
+
+  response_json = response.json()
+  if app_list := response_json.get('_embedded', {}).get('applications', []):
+    for app in app_list:
+      if app['profile']['name'] == c_name:
+        veracode_guid = app['guid']
+        data['veracode_results_url'] = (
+          f"https://analysiscenter.veracode.com/auth/index.jsp#{app['results_url']}"
+        )
+        data['veracode_last_completed_scan_date'] = app['last_completed_scan_date']
+        log_debug(f"Found Veracode app GUID: {veracode_guid}")
+        break
+
+  if not veracode_guid:
+    log_info(f'No veracode scan found for {c_name}')
+    return None, None
+
+  return data, veracode_guid
+
+def get_veracode_summary_report(veracode_guid, c_name, data):
+  try:
+    response = requests.get(
+      VERACODE_API_BASE + f'/appsec/v2/applications/{veracode_guid}/summary_report',
+      auth=RequestsAuthPluginVeracodeHMAC(),
+      headers=VERACODE_HEADERS,
+      timeout=30,
+    )
+    if response.ok:
       try:
-        results_summary_data = veracode_r.json()
-        data.update({'veracode_results_summary': results_summary_data})
-
-        veracode_policy_rules_status = results_summary_data['policy_rules_status']
-        data.update({'veracode_policy_rules_status': veracode_policy_rules_status})
-
-        # If there is a report - assume the project shouldn't be exempt.
-        data.update({'veracode_exempt': False})
-        # log_debug(json.dumps(results_summary_data, indent=2))
-      except Exception as e:
+        results_summary_data = response.json()
+        data['veracode_results_summary'] = results_summary_data
+        data['veracode_policy_rules_status'] = results_summary_data['policy_rules_status']
+        data['veracode_exempt'] = False
+      except ValueError as e:
         log_debug(f'Unable to extract summary data from veracode: {e}')
+      return data
     else:
       log_warning(
-        f'Failure response from veracode for {c_name} (guid: {veracode_guid}): '
+        f'Failure response from Veracode for {c_name} (GUID: {veracode_guid}): '
         f'{response.status_code}'
       )
-
-    log_debug(f'Veracode data: {data}')
-    # Update component with all results in data dict.
-    sc.update('components', c_id, data)
-  else:
-    log_info(f'No veracode scan found for {c_name}')
-
+      return None
+  except requests.RequestException as e:
+    log_warning(
+      f'Veracode API returned an unexpected response looking for a {c_name} '
+      f'(GUID {veracode_guid}) summary report: {e}'
+    )
+    return None
 
 def process_components(data, services):
   log_info(f'Processing batch of {len(data)} components...')
@@ -176,41 +234,8 @@ def main():
     log_error('Service Catalogue connection not OK, exiting.')
     slack.alert('hmpps-veracode-discovery failed: unable to reach Service Catalogue')
     raise SystemExit
-
-  # Test connection to veracode
-  if not VERACODE_API_KEY_ID:
-    slack.alert('VERACODE_API_KEY_ID environment variable not set')
-    job.error_messages.append("VERACODE_API_KEY_ID environment variable not set")
-    sc.update_scheduled_job('Failed')
-    raise SystemExit(
-      'hmpps-veracode-discovery failed: '
-      'VERACODE_API_KEY_ID environment variable not set'
-    )
-
-  if not VERACODE_API_KEY_SECRET:
-    slack.alert('VERACODE_API_KEY_SECRET environment variable not set')
-    job.error_messages.append("VERACODE_API_KEY_SECRET environment variable not set")
-    sc.update_scheduled_job('Failed')
-    raise SystemExit(
-      'hmpps-veracode-discovery failed: '
-      'VERACODE_API_KEY_SECRET environment variable not set'
-    )
-
-  try:
-    response = requests.get(
-      VERACODE_API_BASE + '/healthcheck/status',
-      auth=RequestsAuthPluginVeracodeHMAC(),
-      headers=VERACODE_HEADERS,
-      timeout=30,
-    )
-    if response.status_code == 200:
-      log_debug('Successfully connected to veracode API.')
-  except Exception as e:
-    log_critical('Unable to connect to the veracode API.')
-    slack.alert('Unable to connect to the veracode API.')
-    job.error_messages.append("Unable to connect to the veracode API")
-    sc.update_scheduled_job('Failed')
-    raise SystemExit(e) from e
+  
+  run_veracode_connection(VERACODE_API_KEY_ID, VERACODE_API_KEY_SECRET, services)
 
   components = sc.get_all_records(sc.components_get)
   process_components(components, services)
