@@ -46,23 +46,43 @@ jobs:
       additional_docker_tag: ${{ inputs.additional_docker_tag }}
       push: ${{ inputs.push || true }}
       docker_multiplatform: false
+
+  update_secrets_dev:
+    name: Update Secrets in Dev
+    uses: ./.github/workflows/update_secrets.yml
+    secrets: inherit
+    with:
+      environment: dev
+
   deploy_dev:
     name: Deploy to the development environment
     needs:
       - build
       - helm_lint
+      - update_secrets_dev
     uses: ministryofjustice/hmpps-github-actions/.github/workflows/deploy_env.yml@v2 # WORKFLOW_VERSION
     secrets: inherit
     with:
       environment: 'dev'
       app_version: '${{ needs.build.outputs.app_version }}'
       helm_additional_args: '--set "discoveryCronJob.env.SLACK_NOTIFY_CHANNEL=${{ vars.DEV_SLACK_NOTIFY_CHANNEL }}"  --set "discoveryCronJob.env.SLACK_ALERT_CHANNEL=${{ vars.DEV_SLACK_ALERT_CHANNEL }}"'
+
+  update_secrets_prod:
+    name: Update Secrets in Prod
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/update_secrets.yml
+    secrets: inherit
+    with:
+      environment: prod
+    needs: [deploy_dev]
+
   deploy_prod:
     if: github.ref == 'refs/heads/main'
     name: Deploy to production environment
     needs:
       - build
       - deploy_dev
+      - update_secrets_prod
     uses: ministryofjustice/hmpps-github-actions/.github/workflows/deploy_env.yml@v2 # WORKFLOW_VERSION
     secrets: inherit
     with:
