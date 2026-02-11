@@ -221,7 +221,7 @@ def main():
   run_veracode_connection(sc=sc, slack=slack)
 
   components = sc.get_all_records(sc.components_get)
-  process_components(components, sc=sc, slack=slack)
+  process_components(data=components, sc=sc)
 
   if job.error_messages:
     sc.update_scheduled_job('Errors')
