@@ -276,7 +276,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "hmpps-sre-python-lib", url = "https://github.com/ministryofjustice/hmpps-sre-python-lib/releases/download/v1.0.0/hmpps_sre_python_lib-1.0.0-py3-none-any.whl" },
-    { name = "veracode-api-signing", specifier = "==26.1.0" },
+    { name = "veracode-api-signing", specifier = "==26.4.0" },
 ]
 
 [[package]]
@@ -713,7 +713,7 @@ wheels = [
 
 [[package]]
 name = "veracode-api-signing"
-version = "26.1.0"
+version = "26.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "docopt" },
@@ -722,9 +722,9 @@ dependencies = [
     { name = "requests" },
     { name = "setuptools" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/8b/a6/0e28aaebaef2e9aa8066b88339bd0c9f5d978a2a991ac8fef0a066920d14/veracode_api_signing-26.1.0.tar.gz", hash = "sha256:4548b111bbb33ef5a1bf86036e1f7b26276d784b120de9009fb686b07bb91b10", size = 12982, upload-time = "2026-01-07T18:08:26.582Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/f4/24bb9c3d9056cf9b149f7bb710747e910c455b4bdf282933d85972f0f1ff/veracode_api_signing-26.4.0.tar.gz", hash = "sha256:25c6931d7a7c36c9bdb8e9ab244746d9f6be4295ff6dd3dfeb32a502d4fe3f8c", size = 12970, upload-time = "2026-04-07T15:29:23.716Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8e/40/7624fb6f49a77b56616a521a8a49fd8cacb5cc4bbecb2f1c8ef60d49701d/veracode_api_signing-26.1.0-py2.py3-none-any.whl", hash = "sha256:f3b4ee0ec256b248ad4716bf463642f2a210621fc00f1e3bcd2c5da2e3de742f", size = 19734, upload-time = "2026-01-07T18:08:25.337Z" },
+    { url = "https://files.pythonhosted.org/packages/9f/98/d4b97092902db2b7a081f64385432e1c4f48b3c8ad5c6c61f917fb0d79ab/veracode_api_signing-26.4.0-py2.py3-none-any.whl", hash = "sha256:246d5da66028b74c386e59cc02fc3ac7fa5c9e1f519bff0ddf553fad06e901f5", size = 19736, upload-time = "2026-04-07T15:29:22.365Z" },
 ]
 
 [[package]]
