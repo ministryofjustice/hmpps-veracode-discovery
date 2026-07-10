@@ -11,7 +11,7 @@ The job does the following:
 
 The published data is visible in the HMPPS Developer Portal, for example:
 
-[https://developer-portal.hmpps.service.justice.gov.uk/components/veracode](https://developer-portal.hmpps.service.justice.gov.uk/components/veracode)
+[Developer portal Veracode page](https://developer-portal.hmpps.service.justice.gov.uk/components/veracode)
 
 ## Veracode API Integration
 
@@ -25,7 +25,6 @@ This job depends directly on the Veracode API to retrieve scan and policy data.
 
 API calls used by this service:
 
-- Health check: `GET /healthcheck/status`
 - Application lookup by component name: `GET /appsec/v1/applications?name=<component_name>`
 - Summary report by Veracode GUID: `GET /appsec/v2/applications/<guid>/summary_report`
 
@@ -91,30 +90,8 @@ Run the job:
 uv run python -u veracode_discovery.py
 ```
 
-Run tests:
-
-```bash
-uv run pytest
-```
-
 ## Deployment
 
 Deployment is Kubernetes-based using Helm chart files under `helm_deploy/hmpps-veracode-discovery`.
 
 The CronJob schedule is environment-specific:
-
-- Dev: `25 3,9,15,21 * * *`
-- Prod: `25 */6 * * *`
-
-Primary CI/CD workflows:
-
-- `.github/workflows/pipeline.yml` (test/lint/build/deploy)
-- `.github/workflows/deploy_to_env.yml` (manual deployment)
-
-## Repository Structure
-
-- `veracode_discovery.py`: main scheduled job.
-- `test_veracode_discovery.py`: unit tests.
-- `helm_deploy/`: Helm chart and per-environment values.
-- `Dockerfile`: container image definition.
-- `pyproject.toml`: Python project metadata and dependencies.
