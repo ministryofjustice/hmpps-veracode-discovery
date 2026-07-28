@@ -10,6 +10,13 @@ discoveryCronJob:
 namespace_secrets:
   hmpps-veracode-discovery:
     SC_FILTER: "SC_FILTER"
+  hmpps-envoy-https-proxy-env:
+    HTTP_PROXY: "HTTP_PROXY"
+    HTTPS_PROXY: "HTTPS_PROXY"
+    NO_PROXY: "NO_PROXY"
+    http_proxy: "HTTP_PROXY"
+    https_proxy: "HTTPS_PROXY"
+    no_proxy: "NO_PROXY"
 
 generic-prometheus-alerts:
   alertSeverity: hmpps-sre-alerts-nonprod
