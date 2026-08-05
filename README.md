@@ -87,6 +87,8 @@ uv sync
 Run the job:
 
 ```bash
+unset HTTPS_PROXY HTTP_PROXY NO_PROXY https_proxy http_proxy no_proxy
+export ALLOW_NO_PROXY_LOCAL=true
 uv run python -u veracode_discovery.py
 ```
 
