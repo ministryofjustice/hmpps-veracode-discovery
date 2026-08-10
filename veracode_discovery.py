@@ -8,7 +8,6 @@ from time import sleep
 from veracode_api_signing.plugin_requests import RequestsAuthPluginVeracodeHMAC
 import requests
 from hmpps import ServiceCatalogue, Slack
-from hmpps.utils.utilities import get_request_proxies
 from hmpps.services.job_log_handling import (
   log_debug,
   log_error,
@@ -27,30 +26,6 @@ VERACODE_API_KEY_ID = os.getenv('VERACODE_API_KEY_ID')
 VERACODE_API_KEY_SECRET = os.getenv('VERACODE_API_KEY_SECRET')
 VERACODE_API_BASE = 'https://api.veracode.com'
 VERACODE_HEADERS = {'User-Agent': 'Python HMAC script'}
-REQUEST_PROXIES = None
-
-
-def _validate_proxy_configuration():
-  """Validate proxy requirement while allowing an explicit local override."""
-  global REQUEST_PROXIES
-
-  allow_no_proxy_local = (
-    os.getenv('ALLOW_NO_PROXY_LOCAL', '').strip().lower() in {'1', 'true', 'yes'}
-  )
-  REQUEST_PROXIES = get_request_proxies()
-
-  if not REQUEST_PROXIES:
-    if allow_no_proxy_local:
-      log_warning(
-        'ALLOW_NO_PROXY_LOCAL enabled: running without outbound proxy settings.'
-      )
-      return
-    raise RuntimeError(
-      'Outbound proxy is required. Set HTTPS_PROXY or HTTP_PROXY for this job, '
-      'or set ALLOW_NO_PROXY_LOCAL=true for local testing only.'
-    )
-
-  log_info('Outbound proxy enabled for Veracode discovery clients.')
 
 def run_veracode_connection(sc, slack):
   # Test connection to veracode
@@ -76,7 +51,6 @@ def run_veracode_connection(sc, slack):
       VERACODE_API_BASE + '/healthcheck/status',
       auth=RequestsAuthPluginVeracodeHMAC(),
       headers=VERACODE_HEADERS,
-      proxies=REQUEST_PROXIES,
       timeout=30,
     )
     if response.status_code == 200:
@@ -133,12 +107,11 @@ def fetch_veracode_data(c_name):
       url,
       auth=RequestsAuthPluginVeracodeHMAC(),
       headers=VERACODE_HEADERS,
-      proxies=REQUEST_PROXIES,
       timeout=30,
     )
   except requests.RequestException as e:
-    log_error(f'error in response from veracode for {c_name}: (e)')
-    job.error_messages.append(f'error in response from veracode for {c_name}: (e)')
+    log_error(f'error in response from veracode for {c_name}: {e}')
+    job.error_messages.append(f'error in response from veracode for {c_name}: {e}')
     return None
 
   if not response.ok:
@@ -181,7 +154,6 @@ def get_veracode_summary_report(veracode_guid, c_name, data):
       VERACODE_API_BASE + f'/appsec/v2/applications/{veracode_guid}/summary_report',
       auth=RequestsAuthPluginVeracodeHMAC(),
       headers=VERACODE_HEADERS,
-      proxies=REQUEST_PROXIES,
       timeout=30,
     )
     if response.ok:
@@ -234,10 +206,7 @@ def process_components(data, sc):
 
 def main():
   # service catalogue parameters
-
   job.name = 'hmpps-veracode-discovery'
-
-
 
   slack = Slack()
   sc = ServiceCatalogue()
