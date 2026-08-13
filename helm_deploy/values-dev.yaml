@@ -6,7 +6,15 @@ discoveryCronJob:
   veracode_scan_schedule: "25 3,9,15,21 * * *"
   env:
     LOG_LEVEL: debug
-  
+  namespace_secrets:
+    hmpps-envoy-https-proxy-env:
+      HTTP_PROXY: "HTTP_PROXY"
+      HTTPS_PROXY: "HTTPS_PROXY"
+      NO_PROXY: "NO_PROXY"
+      http_proxy: "HTTP_PROXY"
+      https_proxy: "HTTPS_PROXY"
+      no_proxy: "NO_PROXY"
+
 namespace_secrets:
   hmpps-veracode-discovery:
     SC_FILTER: "SC_FILTER"
