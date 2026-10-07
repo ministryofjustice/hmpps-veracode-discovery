@@ -33,13 +33,13 @@ jobs:
       matrix:
         environments: ['dev', 'prod']
     name: helm lint
-    uses: ministryofjustice/hmpps-github-actions/.github/workflows/test_helm_lint.yml@v2 # WORKFLOW VERSION
+    uses: ministryofjustice/hmpps-github-actions/.github/workflows/test_helm_lint.yml@FEAT/HEAT-1602 # WORKFLOW VERSION
     secrets: inherit
     with:
       environment: ${{ matrix.environments }}
   build:
     name: Build docker image from hmpps-github-actions
-    uses: ministryofjustice/hmpps-github-actions/.github/workflows/docker_build.yml@v2 # WORKFLOW_VERSION
+    uses: ministryofjustice/hmpps-github-actions/.github/workflows/docker_build.yml@FEAT/HEAT-1602 # WORKFLOW_VERSION
     with:
       docker_registry: 'ghcr.io'
       registry_org: 'ministryofjustice'
@@ -60,7 +60,7 @@ jobs:
       - build
       - helm_lint
       - update_secrets_dev
-    uses: ministryofjustice/hmpps-github-actions/.github/workflows/deploy_env.yml@v2 # WORKFLOW_VERSION
+    uses: ministryofjustice/hmpps-github-actions/.github/workflows/deploy_env.yml@FEAT/HEAT-1602 # WORKFLOW_VERSION
     secrets: inherit
     with:
       environment: 'dev'
@@ -83,7 +83,7 @@ jobs:
       - build
       - deploy_dev
       - update_secrets_prod
-    uses: ministryofjustice/hmpps-github-actions/.github/workflows/deploy_env.yml@v2 # WORKFLOW_VERSION
+    uses: ministryofjustice/hmpps-github-actions/.github/workflows/deploy_env.yml@FEAT/HEAT-1602 # WORKFLOW_VERSION
     secrets: inherit
     with:
       environment: 'prod'
